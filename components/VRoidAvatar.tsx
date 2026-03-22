@@ -16,11 +16,13 @@ const loadingPromises = new Map<string, Promise<THREE.Texture | null>>();
 const processedScenes = new Set<string>();
 
 // Module-level shared state for viseme (avoids prop-based re-renders that cause remounts)
-// This is exported so useLipSync can update it directly without triggering React re-renders
 export const visemeState = {
   current: "X" as string,
   isSpeaking: false,
-  emotion: "neutral" as string,  // Also track emotion to avoid re-renders
+  emotion: "neutral" as string,
+  avatarWarmth: 0.5,
+  relationshipLevel: 1,
+  moodState: "present" as string,
 };
 
 /**
@@ -566,25 +568,27 @@ const AvatarModel = memo(function AvatarModel({ vrm }: AvatarModelProps) {
 
     vrm.expressionManager.update();
 
-    // --- Head movement only when speaking ---
+    // --- Head movement: mood-aware ---
     const headBone = vrm.humanoid.getNormalizedBoneNode("head");
+    const currentMood = visemeState.moodState;
     if (headBone) {
       if (currentIsSpeaking) {
-        // Animate head movement while speaking
-        const yawAmp = 0.08; // ~4.5 degrees
-        const pitchAmp = 0.05; // ~2.8 degrees
-        
-        // Target rotations based on clock
+        const yawAmp = 0.08;
+        const pitchAmp = 0.05;
         const targetY = Math.sin(clock * 0.4) * yawAmp + Math.sin(clock * 1.2) * (yawAmp * 0.3);
         const targetX = Math.sin(clock * 0.3) * pitchAmp + Math.sin(clock * 0.8) * (pitchAmp * 0.2);
         const targetZ = Math.sin(clock * 0.7) * 0.03;
-        
-        // Smoothly interpolate to target
         headBone.rotation.y = THREE.MathUtils.lerp(headBone.rotation.y, targetY, 0.15);
         headBone.rotation.x = THREE.MathUtils.lerp(headBone.rotation.x, targetX, 0.15);
         headBone.rotation.z = THREE.MathUtils.lerp(headBone.rotation.z, targetZ, 0.15);
+      } else if (currentMood === "lonely" || currentMood === "missing") {
+        // Subtle slow idle when lonely: head slightly down, slow gentle sway
+        const idleY = Math.sin(clock * 0.15) * 0.02;
+        const idleX = 0.06 + Math.sin(clock * 0.1) * 0.01;
+        headBone.rotation.y = THREE.MathUtils.lerp(headBone.rotation.y, idleY, 0.04);
+        headBone.rotation.x = THREE.MathUtils.lerp(headBone.rotation.x, idleX, 0.04);
+        headBone.rotation.z = THREE.MathUtils.lerp(headBone.rotation.z, 0, 0.04);
       } else {
-        // Smoothly return to neutral position when idle
         headBone.rotation.y = THREE.MathUtils.lerp(headBone.rotation.y, 0, 0.1);
         headBone.rotation.x = THREE.MathUtils.lerp(headBone.rotation.x, 0, 0.1);
         headBone.rotation.z = THREE.MathUtils.lerp(headBone.rotation.z, 0, 0.1);
@@ -627,6 +631,44 @@ const handleCanvasCreated = (state: RootState) => {
   state.camera.lookAt(0, 1.6, 0);
   state.camera.updateProjectionMatrix();
 };
+
+function MoodLighting() {
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const pointRef = useRef<THREE.PointLight>(null);
+
+  useFrame(() => {
+    const warmth = visemeState.avatarWarmth;
+    const level = visemeState.relationshipLevel;
+    const mood = visemeState.moodState;
+
+    // Ambient intensity: dim for lonely, bright for present
+    let targetAmbient = 0.8 + warmth * 0.6;
+    if (mood === "lonely") targetAmbient = 0.6;
+    else if (mood === "missing") targetAmbient = 0.75;
+
+    if (ambientRef.current) {
+      ambientRef.current.intensity = THREE.MathUtils.lerp(
+        ambientRef.current.intensity, targetAmbient, 0.05
+      );
+    }
+
+    // Glow point light: stronger at higher levels
+    if (pointRef.current) {
+      const glowTarget = level >= 7 ? 0.6 : level >= 4 ? 0.3 : 0;
+      pointRef.current.intensity = THREE.MathUtils.lerp(
+        pointRef.current.intensity, glowTarget, 0.03
+      );
+    }
+  });
+
+  return (
+    <>
+      <ambientLight ref={ambientRef} intensity={1.2} />
+      <directionalLight position={[1, 2, 3]} intensity={1.0} />
+      <pointLight ref={pointRef} position={[0, 1.5, 0.5]} intensity={0} color="#fbbf24" distance={3} />
+    </>
+  );
+}
 
 function VRoidAvatarInner({
   vrmUrl,
@@ -698,8 +740,7 @@ function VRoidAvatarInner({
         gl={{ alpha: true }}
         onCreated={handleCanvasCreated}
       >
-        <ambientLight intensity={1.2} />
-        <directionalLight position={[1, 2, 3]} intensity={1.0} />
+        <MoodLighting />
         {vrm && (
           <AvatarModel
             vrm={vrm}

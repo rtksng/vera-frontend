@@ -1,93 +1,259 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Redirect, Slot, useSegments, Href } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import 'react-native-reanimated';
+import { useCallback, useEffect, useRef } from 'react';
+import { ClerkProvider, useAuth } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
+import { Slot, useRouter } from 'expo-router';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { AppState, Platform, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
+import {
+  CormorantGaramond_600SemiBold,
+  CormorantGaramond_700Bold,
+} from '@expo-google-fonts/cormorant-garamond';
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from '@expo-google-fonts/outfit';
+import { registerForPushNotifications } from '@/lib/notifications';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { AuthColors } from '@/constants/theme';
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({
+  duration: 250,
+  fade: true,
+});
 
-// Settings for Expo Router
-export const unstable_settings = {
-  initialRouteName: '(tabs)',
-};
-
-function AuthGate() {
-  const { session, isLoading, isProfileComplete, user } = useAuth();
-  const segments = useSegments();
-
-  // Debug logging
-  console.log('[AuthGate] Current state:', {
-    isLoading,
-    hasSession: !!session,
-    isProfileComplete,
-    userEmail: user?.email,
-    currentSegment: segments[0] || 'none',
-  });
-
-  // Show loading screen while checking auth state
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={AuthColors.primary} />
-      </View>
-    );
+function ensureNativeDocumentShim() {
+  if (Platform.OS === 'web') {
+    return;
   }
 
-  // Determine current route group
-  const inAuthGroup = segments[0] === '(auth)';
-  const inOnboardingGroup = segments[0] === '(onboarding)';
-  const inTabsGroup = segments[0] === '(tabs)';
+  const globalScope = globalThis as typeof globalThis & {
+    Event?: new (
+      type: string,
+      eventInitDict?: {
+        bubbles?: boolean;
+        cancelable?: boolean;
+        composed?: boolean;
+      }
+    ) => {
+      type: string;
+      bubbles: boolean;
+      cancelable: boolean;
+      composed: boolean;
+      defaultPrevented: boolean;
+      preventDefault: () => void;
+      stopPropagation: () => void;
+      stopImmediatePropagation: () => void;
+    };
+    CustomEvent?: new (
+      type: string,
+      eventInitDict?: {
+        bubbles?: boolean;
+        cancelable?: boolean;
+        composed?: boolean;
+        detail?: unknown;
+      }
+    ) => {
+      type: string;
+      detail?: unknown;
+      bubbles: boolean;
+      cancelable: boolean;
+      composed: boolean;
+      defaultPrevented: boolean;
+      preventDefault: () => void;
+      stopPropagation: () => void;
+      stopImmediatePropagation: () => void;
+    };
+    window?: {
+      addEventListener?: (...args: unknown[]) => void;
+      removeEventListener?: (...args: unknown[]) => void;
+      dispatchEvent?: (event: unknown) => boolean;
+    };
+    document?: {
+      hasFocus?: () => boolean;
+      visibilityState?: string;
+      addEventListener?: (...args: unknown[]) => void;
+      removeEventListener?: (...args: unknown[]) => void;
+      dispatchEvent?: (event: unknown) => boolean;
+      title?: string;
+    };
+  };
 
-  // ROUTING LOGIC:
-  // 1. No session -> must be in auth group
-  // 2. Has session, no profile -> must be in onboarding group
-  // 3. Has session + profile -> must be in tabs group
+  if (typeof globalScope.Event !== 'function') {
+    class EventShim {
+      type: string;
+      bubbles: boolean;
+      cancelable: boolean;
+      composed: boolean;
+      defaultPrevented: boolean;
 
-  if (!session) {
-    // User is not authenticated
-    if (!inAuthGroup) {
-      console.log('[AuthGate] No session, redirecting to auth');
-      return <Redirect href={'/(auth)/sign-in' as Href} />;
+      constructor(
+        type: string,
+        eventInitDict?: {
+          bubbles?: boolean;
+          cancelable?: boolean;
+          composed?: boolean;
+        },
+      ) {
+        this.type = type;
+        this.bubbles = eventInitDict?.bubbles ?? false;
+        this.cancelable = eventInitDict?.cancelable ?? false;
+        this.composed = eventInitDict?.composed ?? false;
+        this.defaultPrevented = false;
+      }
+
+      preventDefault() {
+        if (this.cancelable) {
+          this.defaultPrevented = true;
+        }
+      }
+
+      stopPropagation() {}
+
+      stopImmediatePropagation() {}
     }
-  } else if (!isProfileComplete) {
-    // User is authenticated but hasn't completed onboarding
-    if (!inOnboardingGroup) {
-      console.log('[AuthGate] No profile, redirecting to onboarding');
-      return <Redirect href={'/(onboarding)' as Href} />;
+
+    globalScope.Event = EventShim;
+  }
+
+  if (typeof globalScope.CustomEvent !== 'function') {
+    class CustomEventShim extends globalScope.Event {
+      detail: unknown;
+
+      constructor(
+        type: string,
+        eventInitDict?: {
+          bubbles?: boolean;
+          cancelable?: boolean;
+          composed?: boolean;
+          detail?: unknown;
+        },
+      ) {
+        super(type, eventInitDict);
+        this.detail = eventInitDict?.detail;
+      }
     }
-  } else {
-    // User is fully authenticated with complete profile
-    if (inAuthGroup || inOnboardingGroup) {
-      console.log('[AuthGate] Has profile, redirecting to tabs');
-      return <Redirect href={'/(tabs)' as Href} />;
+
+    globalScope.CustomEvent = CustomEventShim;
+  }
+
+  const windowRef = globalScope.window;
+  if (windowRef) {
+    if (typeof windowRef.addEventListener !== 'function') {
+      windowRef.addEventListener = () => {};
+    }
+
+    if (typeof windowRef.removeEventListener !== 'function') {
+      windowRef.removeEventListener = () => {};
+    }
+
+    if (typeof windowRef.dispatchEvent !== 'function') {
+      windowRef.dispatchEvent = () => true;
     }
   }
 
-  // Render the appropriate screen
-  return <Slot />;
+  const documentRef = globalScope.document;
+  if (!documentRef) {
+    return;
+  }
+
+  if (typeof documentRef.hasFocus !== 'function') {
+    documentRef.hasFocus = () => AppState.currentState === 'active';
+  }
+
+  if (typeof documentRef.addEventListener !== 'function') {
+    documentRef.addEventListener = () => {};
+  }
+
+  if (typeof documentRef.removeEventListener !== 'function') {
+    documentRef.removeEventListener = () => {};
+  }
+
+  if (typeof documentRef.dispatchEvent !== 'function') {
+    documentRef.dispatchEvent = () => true;
+  }
+
+  if (typeof documentRef.title !== 'string') {
+    documentRef.title = 'Vera';
+  }
+
+  if (typeof documentRef.visibilityState === 'undefined') {
+    try {
+      Object.defineProperty(documentRef, 'visibilityState', {
+        configurable: true,
+        enumerable: true,
+        get: () => (AppState.currentState === 'active' ? 'visible' : 'hidden'),
+      });
+    } catch {
+      documentRef.visibilityState = 'visible';
+    }
+  }
+}
+
+ensureNativeDocumentShim();
+
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
+if (!publishableKey) throw new Error('Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to .env');
+
+function PushNotificationHandler() {
+  const { getToken, isSignedIn } = useAuth();
+  const router = useRouter();
+  const hasRegistered = useRef(false);
+
+  useEffect(() => {
+    if (!isSignedIn || hasRegistered.current) return;
+    hasRegistered.current = true;
+    registerForPushNotifications(getToken).catch(() => {});
+  }, [isSignedIn, getToken]);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data;
+      if (data?.type === "ai_initiate" || data?.type?.toString().startsWith("ritual_")) {
+        router.push("/(home)");
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  return null;
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const splashHiddenRef = useRef(false);
+  const [fontsLoaded] = useFonts({
+    CormorantGaramond_600SemiBold,
+    CormorantGaramond_700Bold,
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+  });
+
+  const onLayoutRootView = useCallback(() => {
+    if (splashHiddenRef.current || !fontsLoaded) {
+      return;
+    }
+
+    splashHiddenRef.current = true;
+    void SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
-    <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthGate />
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <PushNotificationHandler />
+          <Slot />
+        </ClerkProvider>
+      </View>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: AuthColors.background,
-  },
-});

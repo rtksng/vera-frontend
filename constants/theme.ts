@@ -1,87 +1,110 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+const tintColorLight = '#2563eb';
+const tintColorDark = '#93c5fd';
 
-import { Platform } from 'react-native';
+export const AppTheme = {
+  primary: '#2563eb',
+  primaryStrong: '#1d4ed8',
+  primarySoft: '#dbeafe',
+  primaryGlow: '#bfdbfe',
+  background: '#f4f7fb',
+  backgroundSecondary: '#eef3f9',
+  backgroundTertiary: '#e2e8f0',
+  surface: 'rgba(255, 255, 255, 0.72)',
+  surfaceStrong: 'rgba(255, 255, 255, 0.9)',
+  surfaceMuted: 'rgba(248, 250, 252, 0.82)',
+  glassBorder: 'rgba(255, 255, 255, 0.84)',
+  outline: 'rgba(148, 163, 184, 0.22)',
+  divider: 'rgba(148, 163, 184, 0.18)',
+  textPrimary: '#0f172a',
+  textSecondary: '#475569',
+  textMuted: '#64748b',
+  placeholder: '#94a3b8',
+  inputBackground: 'rgba(255, 255, 255, 0.74)',
+  inputBorder: 'rgba(148, 163, 184, 0.22)',
+  inputText: '#0f172a',
+  shadow: '#94a3b8',
+  shadowStrong: '#64748b',
+  error: '#dc2626',
+  errorLight: '#b91c1c',
+  errorBackground: 'rgba(254, 226, 226, 0.92)',
+  success: '#059669',
+  successBackground: 'rgba(220, 252, 231, 0.92)',
+  warning: '#d97706',
+  overlay: 'rgba(15, 23, 42, 0.06)',
+  online: '#10b981',
+  buttonDisabledOpacity: 0.55,
+};
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+export const AuthColors = AppTheme;
 
-// Auth-specific color scheme
-export const AuthColors = {
-  // Primary
-  primary: '#1A6DFF',
-  primaryLight: '#4A8FFF',
-  primaryDark: '#0D4FCC',
-  
-  // Background
-  background: '#0A0F2C',
-  surface: '#141830',
-  surfaceLight: '#1A2040',
-  
-  // Text
-  textPrimary: '#FFFFFF',
-  textSecondary: '#4A5270',
-  textMuted: '#6B7394',
-  placeholder: '#4A5270',
-  
-  // Status
-  error: '#FF4757',
-  errorLight: '#FF6B6B',
-  errorBackground: '#2A1A1A',
-  success: '#00D26A',
-  successBackground: '#1A2A1A',
-  
-  // Input
-  inputBackground: '#141830',
-  inputBorder: '#1A2040',
-  inputText: '#E8EAF6',
-  
-  // Button
-  buttonDisabledOpacity: 0.6,
+export const Glass = {
+  card: {
+    backgroundColor: AppTheme.surface,
+    borderWidth: 1,
+    borderColor: AppTheme.glassBorder,
+    shadowColor: AppTheme.shadow,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 10,
+  },
+  cardStrong: {
+    backgroundColor: AppTheme.surfaceStrong,
+    borderWidth: 1,
+    borderColor: AppTheme.glassBorder,
+    shadowColor: AppTheme.shadowStrong,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  floating: {
+    backgroundColor: AppTheme.surfaceStrong,
+    borderWidth: 1,
+    borderColor: AppTheme.glassBorder,
+    shadowColor: AppTheme.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  pill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderWidth: 1,
+    borderColor: AppTheme.glassBorder,
+  },
+  input: {
+    backgroundColor: AppTheme.inputBackground,
+    borderWidth: 1,
+    borderColor: AppTheme.inputBorder,
+  },
 };
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: AppTheme.textPrimary,
+    background: AppTheme.background,
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: AppTheme.textMuted,
+    tabIconDefault: AppTheme.textMuted,
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: '#e2e8f0',
+    background: '#0f172a',
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: '#94a3b8',
+    tabIconDefault: '#94a3b8',
     tabIconSelected: tintColorDark,
   },
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+export const Fonts = {
+  heading: 'CormorantGaramond_700Bold',
+  headingSoft: 'CormorantGaramond_600SemiBold',
+  body: 'Outfit_400Regular',
+  bodyMedium: 'Outfit_500Medium',
+  bodySemiBold: 'Outfit_600SemiBold',
+  bodyBold: 'Outfit_700Bold',
+  mono: 'monospace',
+} as const;
